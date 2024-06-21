@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Juego 2048</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        * {
+            padding: 0;
+            margin: 0;
+            box-sizing: border-box;
+            font-family: "Poppins", sans-serif;
+        }
+        body {
+            height: 100vh;
+            background-color: #faf8ef;
+            overflow-y: hidden;
+        }
+        .heading {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        h1 {
+            color: #776e65;
+            font-size: 4em;
+        }
+        .container {
+            position: absolute;
+            transform: translate(-50%, -50%) scale(0.8);
+            top: 50%;
+            left: 50%;
+        }
+        .score-container {
+            color: #776e65;
+        }
+        #score {
+            font-weight: 600;
+        }
+        .grid {
+            width: 25em;
+            height: 25em;
+            background-color: #cdc1b5;
+            border: 5px solid #bbada0;
+            margin: 0 auto;
+            display: flex;
+            flex-wrap: wrap;
+            border-radius: 0.5em;
+        }
+        .box {
+            transition: transform 0.5s ease;
+            width: 97.5px;
+            height: 97.5px;
+            border: 5px solid #bbada0;
+            font-size: 40px;
+            font-weight: bold;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .box-2 {
+            background-color: #eee4da;
+            color: #727371;
+        }
+        .box-4 {
+            background-color: #eee1c9;
+            color: #727371;
+        }
+        .box-8 {
+            background-color: #f3b27a;
+            color: white;
+        }
+        .box-16 {
+            background-color: #f69664;
+            color: white;
+        }
+        .box-32 {
+            background-color: #f77c5f;
+            color: white;
+        }
+        .box-64 {
+            background-color: #f75f3b;
+            color: white;
+        }
+        .box-128 {
+            background-color: #edd073;
+            color: white;
+        }
+        .box-256 {
+            background-color: #edcc63;
+            color: white;
+        }
+        .box-512 {
+            background-color: #edc651;
+            color: white;
+        }
+        .box-1024 {
+            background-color: #eec744;
+            color: white;
+        }
+        .box-2048 {
+            background-color: #ecc230;
+            color: white;
+        }
+        .cover-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            background-color: #ddd;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+        #start-button {
+            background-color: #8f7a66;
+            padding: 1em 0.8em;
+            border-radius: 0.5em;
+            border: none;
+            font-size: 1em;
+            letter-spacing: 0.2px;
+            color: #ffffff;
+        }
+        .hide {
+            display: none;
+        }
+        a {
+            background-color: #8f7a66;
+            color: #ffffff;
+            display: block;
+            padding: 1em 0;
+            text-align: center;
+            text-decoration: none;
+            margin-top: 1em;
+            border-radius: 0.4em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container hide">
+        <div class="heading">
+            <h1>2048</h1>
+            <div class="score-container">
+                Puntuación:
+                <span id="score">0</span>
+            </div>
+        </div>
+        <div class="grid"></div>
+    </div>
+    <div class="cover-screen">
+        <h2 id="over-text" class="hide">Game Over</h2>
+        <p id="result"></p>
+        <button id="start-button">Iniciar Juego</button>
+    </div>
+    <script>
+        let grid = document.querySelector('.grid');
+        const startButton = document.getElementById('start-button');
+        const container = document.querySelector('.container');
+        const coverScreen = document.querySelector('.cover-screen');
+        const result = document.getElementById('result');
+        const overText = document.getElementById('over-text');
+        let matrix,
+            score,
+            isSwiped,
+            touchY,
+            initialY = 0,
+            touchX,
+            initialX = 0,
+            rows = 4,
+            columns = 4,
+            swipeDirection;
+
+        // Obtener la posición izquierda y superior de la cuadrícula (para swipe)
+        let rectLeft = grid.getBoundingClientRect().left;
+        let rectTop = grid.getBoundingClientRect().top;
+
+        // Obtener la posición exacta X e Y del toque
+        const getXY = (e) => {
+            touchX = e.touches[0].pageX - rectLeft;
+            touchY = e.touches[0].pageY - rectTop;
+        };
+
+        // Crear la cuadrícula inicial
+        const createGrid = () => {
+            for (let i = 0; i < rows; i++) {
+                for (let j = 0; j < columns; j++) {
+                    const boxDiv = document.createElement('div');
+                    boxDiv.classList.add('box');
+                    boxDiv.setAttribute('data-position', `${i}_${j}`);
+                    grid.appendChild(boxDiv);
+                }
+            }
+        };
+
+        // Función para comparar dos matrices
+        const checkMovement = (matrix1, matrix2) => {
+            for (let i = 0; i < matrix1.length; i++) {
+                for (let j = 0; j < matrix1[i].length; j++) {
+                    if (matrix1[i][j] !== matrix2[i][j]) {
+                        // Cambios detectados
+                        return true;
+                    }
+                }
+            }
+            // No hay cambios
+            return false;
+        };
+
+        // Comprobar si los valores adyacentes son iguales (solo para possibleMovesCheck)
+        const adjacentCheck = (arr) => {
+            for (let i = 0; i < arr.length - 1; i++) {
+                if (arr[i] == arr[i + 1]) {
+                    return true;
+                }
+            }
+            return false;
+        };
+
+        // Comprobar si quedan movimientos posibles
+        const possibleMovesCheck = () => {
+            for (let i in matrix) {
+                if (adjacentCheck(matrix[i])) {
+                    // Movimientos hacia la izquierda o derecha posibles
+                    return true;
+                }
+                let colarr = [];
+                for (let j = 0; j < columns; j++) {
+                    // Movimientos hacia arriba o abajo posibles
+                    colarr.push(matrix[j][i]);
+                }
+                if (adjacentCheck(colarr)) {
+                    return true;
+                }
+            }
+            // No quedan movimientos posibles
+            return false;
+        };
+
+        // Obtener una posición aleatoria del array
+        const randomPosition = (arr) => {
+            return Math.floor(Math.random() * arr.length);
+        };
+
+        // Comprobar si hay alguna casilla vacía
+        const hasEmptyBox = () => {
+            for (let r in matrix) {
+                for (let c in matrix[r]) {
+                    if (matrix[r][c] == 0) {
+                        // Al menos una casilla vacía en el tablero
+                        return true;
+                    }
+                }
+            }
+            // No quedan casillas vacías
+            return false;
+        };
+
+        // Comprobar si el juego ha terminado
+        const gameOverCheck = () => {
+            // Si no hay casillas vacías, comprobar si quedan movimientos posibles
+            if (!possibleMovesCheck()) {
+                // Si no hay movimientos posibles, el juego ha terminado
+                coverScreen.classList.remove('hide');
+                container.classList.add('hide');
+                alert('Game Over');
+                overText.classList.remove('hide');
+                result.innerText = `Puntuación final: ${score}`;
+                startButton.innerText = 'Reiniciar Juego';
+            }
+        };
+
+        // Generar '2' en una posición aleatoria
+        const generateTwo = () => {
+            // Comprobar si hay casillas vacías
+            if (hasEmptyBox()) {
+                let randomRow = randomPosition(matrix);
+                let randomCol = randomPosition(matrix[randomPosition(matrix)]);
+                // Si la posición aleatoria tiene un '0', reemplazarlo por 2
+                if (matrix[randomRow][randomCol] == 0) {
+                    matrix[randomRow][randomCol] = 2;
+                    let element = document.querySelector(`[data-position='${randomRow}_${randomCol}']`);
+                    element.innerHTML = 2;
+                    element.classList.add('box-2');
+                } else {
+                    generateTwo();
+                }
+            } else {
+                gameOverCheck();
+            }
+        };
+
+        // Generar '4' en una posición aleatoria
+        const generateFour = () => {
+            if (hasEmptyBox()) {
+                let randomRow = randomPosition(matrix);
+                let randomCol = randomPosition(matrix[randomPosition(matrix)]);
+                if (matrix[randomRow][randomCol] == 0) {
+                    matrix[randomRow][randomCol] = 4;
+                    let element = document.querySelector(`[data-position='${randomRow}_${randomCol}']`);
+                    element.innerHTML = 4;
+                    element.classList.add('box-4');
+                } else {
+                    generateFour();
+                }
+            } else {
+                gameOverCheck();
+            }
+        };
+
+        // Eliminar ceros de un array
+        const removeZero = (arr) => arr.filter((num) => num);
+
+        // Función para combinar números y actualizar la puntuación
+        const checker = (arr, reverseArr = false) => {
+            arr = reverseArr ? removeZero(arr).reverse() : removeZero(arr);
+
+            for (let i = 0; i < arr.length - 1; i++) {
+                if (arr[i] == arr[i + 1]) {
+                    arr[i] += arr[i + 1];
+                    arr[i + 1] = 0;
+                    score += arr[i];
+                }
+            }
+
+            arr = reverseArr ? removeZero(arr.reverse()) : removeZero(arr);
+
+            let missingCount = 4 - arr.length;
+            while (missingCount > 0) {
+                if (reverseArr) {
+                    arr.unshift(0);
+                } else {
+                    arr.push(0);
+                }
+                missingCount -= 1;
+            }
+
+            return arr;
+        };
+
+        // Funciones para deslizar en las cuatro direcciones
+        const slideDown = () => {
+            const oldMatrix = JSON.parse(JSON.stringify(matrix));
+            for (let i = 0; i < columns; i++) {
+                let num = [];
+                for (let j = 0; j < rows; j++) {
+                    num.push(matrix[j][i]);
+                }
+                num = checker(num, true);
+                for (let j = 0; j < rows; j++) {
+                    matrix[j][i] = num[j];
+                    let element = document.querySelector(`[data-position='${j}_${i}']`);
+                    element.innerHTML = matrix[j][i] ? matrix[j][i] : '';
+                    element.classList.value = '';
+                    element.classList.add('box', `box-${matrix[j][i]}`);
+                }
+            }
+            if (checkMovement(oldMatrix, matrix)) {
+                let decision = Math.random() > 0.5 ? 1 : 0;
+                if (decision) {
+                    setTimeout(generateFour, 200);
+                } else {
+                    setTimeout(generateTwo, 200);
+                }
+            }
+        };
+
+        const slideUp = () => {
+            const oldMatrix = JSON.parse(JSON.stringify(matrix));
+            for (let i = 0; i < columns; i++) {
+                let num = [];
+                for (let j = 0; j < rows; j++) {
+                    num.push(matrix[j][i]);
+                }
+                num = checker(num);
+                for (let j = 0; j < rows; j++) {
+                    matrix[j][i] = num[j];
+                    let element = document.querySelector(`[data-position='${j}_${i}']`);
+                    element.innerHTML = matrix[j][i] ? matrix[j][i] : '';
+                    element.classList.value = '';
+                    element.classList.add('box', `box-${matrix[j][i]}`);
+                }
+            }
+            if (checkMovement(oldMatrix, matrix)) {
+                let decision = Math.random() > 0.5 ? 1 : 0;
+                if (decision) {
+                    setTimeout(generateFour, 200);
+                } else {
+                    setTimeout(generateTwo, 200);
+                }
+            }
+        };
+
+        const slideRight = () => {
+            const oldMatrix = JSON.parse(JSON.stringify(matrix));
+            for (let i = 0; i < rows; i++) {
+                let num = [];
+                for (let j = 0; j < columns; j++) {
+                    num.push(matrix[i][j]);
+                }
+                num = checker(num, true);
+                for (let j = 0; j < columns; j++) {
+                    matrix[i][j] = num[j];
+                    let element = document.querySelector(`[data-position='${i}_${j}']`);
+                    element.innerHTML = matrix[i][j] ? matrix[i][j] : '';
+                    element.classList.value = '';
+                    element.classList.add('box', `box-${matrix[i][j]}`);
+                }
+            }
+            if (checkMovement(oldMatrix, matrix)) {
+                let decision = Math.random() > 0.5 ? 1 : 0;
+                if (decision) {
+                    setTimeout(generateFour, 200);
+                } else {
+                    setTimeout(generateTwo, 200);
+                }
+            }
+        };
+
+        const slideLeft = () => {
+            const oldMatrix = JSON.parse(JSON.stringify(matrix));
+            for (let i = 0; i < rows; i++) {
+                let num = [];
+                for (let j = 0; j < columns; j++) {
+                    num.push(matrix[i][j]);
+                }
+
+                num = checker(num);
+                for (let j = 0; j < columns; j++) {
+                    matrix[i][j] = num[j];
+                    let element = document.querySelector(`[data-position='${i}_${j}']`);
+                    element.innerHTML = matrix[i][j] ? matrix[i][j] : '';
+                    element.classList.value = '';
+                    element.classList.add('box', `box-${matrix[i][j]}`);
+                }
+            }
+
+            if (checkMovement(oldMatrix, matrix)) {
+                let decision = Math.random() > 0.5 ? 1 : 0;
+                if (decision) {
+                    setTimeout(generateFour, 200);
+                } else {
+                    setTimeout(generateTwo, 200);
+                }
+            }
+        };
+
+        // Event listener para teclas de flecha
+        document.addEventListener('keyup', (e) => {
+            if (e.code == 'ArrowLeft') {
+                slideLeft();
+            } else if (e.code == 'ArrowRight') {
+                slideRight();
+            } else if (e.code == 'ArrowUp') {
+                slideUp();
+            } else if (e.code == 'ArrowDown') {
+                slideDown();
+            }
+            document.getElementById('score').innerText = score;
+        });
+
+        // Event listeners para swipe en pantalla táctil
+        grid.addEventListener('touchstart', (event) => {
+            isSwiped = true;
+            getXY(event);
+            initialX = touchX;
+            initialY = touchY;
+        });
+
+        grid.addEventListener('touchmove', (event) => {
+            if (isSwiped) {
+                getXY(event);
+                let diffX = touchX - initialX;
+                let diffY = touchY - initialY;
+                if (Math.abs(diffY) > Math.abs(diffX)) {
+                    swipeDirection = diffY > 0 ? 'down' : 'up';
+                } else {
+                    swipeDirection = diffX > 0 ? 'right' : 'left';
+                }
+            }
+        });
+
+        grid.addEventListener('touchend', () => {
+            isSwiped = false;
+            if (!swipeDirection) {
+                return false;
+            }
+            let swipeCalls = {
+                up: slideUp,
+                down: slideDown,
+                left: slideLeft,
+                right: slideRight,
+            };
+            swipeCalls[swipeDirection]();
+            document.getElementById('score').innerText = score;
+            swipeDirection = '';
+        });
+
+        // Función para iniciar el juego
+        const startGame = () => {
+            score = 0;
+            document.getElementById('score').innerText = score;
+            grid.innerHTML = '';
+            matrix = [
+                [0, 0, 0, 0],
+                [0, 0, 0, 0],
+                [0, 0, 0, 0],
+                [0, 0, 0, 0],
+            ];
+            container.classList.remove('hide');
+            coverScreen.classList.add('hide');
+            createGrid();
+            generateTwo();
+            generateTwo();
+        };
+
+        // Event listener para el botón de inicio/reinicio
+        startButton.addEventListener('click', () => {
+            startGame();
+            swipeDirection = '';
+        });
+
+    </script>
+</body>
+</html>
